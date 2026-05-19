@@ -223,5 +223,14 @@ gh repo create p-vbordei/<name>-py --public --source=. --remote=origin \
 
 ## Per-repo notes (will be filled out as each is done)
 
-- **agent-id** — pilot. Done.
-- **agent-cid** — next.
+- **agent-id** — pilot. Done. C1/C2/C3 pass both langs.
+- **agent-cid** — done. C1–C5 (roundtrip, tamper, parent-chain, canonical, did:web). Custom CIDv1 encoder; no `multiformats` crate needed.
+- **agent-scroll** — done. C1–C4. **Gotcha: numbers > 2^53.** Python `jcs` lib handles this correctly (RFC 8785 mandates f64 ToString), but Rust `serde_jcs` preserves u64. Workaround: a `normalize_numbers` walker in `canonical.rs` that coerces u64/i64 magnitude > 2^53 to f64 before canonicalization. Apply this pattern to every Rust port that has large integer fields.
+
+## Critical Rust gotcha: JCS number precision
+
+RFC 8785 §3.2.2.3 mandates that all JSON numbers be canonicalized through ECMA-262 ToString of an f64 — meaning integers above 2^53 LOSE PRECISION when canonicalized. `serde_jcs` v0.1 does not do this; it preserves u64/i64 as integer strings. The Python `jcs` package follows the spec correctly.
+
+Fix: prepend a `normalize_numbers` pass to every Rust port's canonical function — see `agent-scroll-rs/src/canonical.rs`. It walks the `Value` tree and replaces `Number::U64(n)` with `Number::from_f64(n as f64)` when `n > (1u64 << 53)`. Same for `i64`.
+
+This affects any field that might hold a timestamp_ns, nonce, sequence number, or any large integer.
